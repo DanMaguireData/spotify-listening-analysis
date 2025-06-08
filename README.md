@@ -1,7 +1,7 @@
-# Sptofy Listening Analysis
+# Spotify Listening Analysis
 A Python project for an in-depth analysis of your personal Spotify streaming history. Uncover your most listened-to tracks, artists, genres, and evolving listening patterns, creating a personalized music profile beyond the annual Wrapped summary. This repository emphasizes professional coding standards and Python best practices.
 
-## Features (Example - to be filled in later)
+## Features (WIP)
 
 *   Detailed analysis of listening habits over time.
 *   Identification of top tracks, artists, and genres.
