@@ -1,0 +1,51 @@
+repos:
+-   repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+    -   id: check-ast
+    -   id: check-merge-conflict
+    -   id: check-case-conflict
+    -   id: check-json
+    -   id: check-yaml
+    -   id: end-of-file-fixer
+    -   id: trailing-whitespace
+    -   id: mixed-line-ending
+    -   id: pretty-format-json
+        args:
+          - "--autofix"
+          - "--indent=4"
+    -   id: requirements-txt-fixer
+-   repo: https://github.com/psf/black
+    rev: 25.1.0
+    hooks:
+    -   id: black
+        language_version: python3.11
+-   repo: https://github.com/asottile/blacken-docs
+    rev: 1.19.1
+    hooks:
+    -   id: blacken-docs
+        additional_dependencies: [black==23.3.0]
+-   repo: https://github.com/asottile/seed-isort-config
+    rev: v2.2.0
+    hooks:
+    -   id: seed-isort-config
+-   repo: https://github.com/pre-commit/mirrors-isort
+    rev: v5.10.1
+    hooks:
+    -   id: isort
+        args: ["--profile", "black"]
+-   repo: local
+    hooks:
+    -   id: pylint
+        name: pylint
+        entry: pylint
+        exclude: ^alembic/.*
+        language: system
+        types: [python]
+        args: ["--rcfile=.pylintrc", "--output-format=colorized", "--load-plugins=pylint.extensions.docparams"]
+-   repo: https://github.com/pre-commit/mirrors-mypy
+    rev: v1.16.0
+    hooks:
+    -   id: mypy
+        exclude: ^alembic/.*
+        args: ["--install-types", "--non-interactive", "--ignore-missing-imports"]

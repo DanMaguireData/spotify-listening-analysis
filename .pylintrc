@@ -1,0 +1,5 @@
+[FORMAT]
+max-line-length = 79 # Pep standard
+
+[MASTER]
+ignore = .git, __pycache__, .venv
