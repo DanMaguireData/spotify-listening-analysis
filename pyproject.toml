@@ -1,0 +1,5 @@
+[tool.flake8]
+max-line-length =  79 # Pep 8 standard
+
+[tool.black]
+line-length = 79 # Pep 8 standard
