@@ -13,6 +13,7 @@ placed in the 'data/' directory
 import logging
 import sys
 
+from src.data_processor import clean_and_prepare_streaming_data
 from src.file_io import list_streaming_files, load_files_into_dataframe
 
 # Setup Logger
@@ -43,8 +44,11 @@ def main() -> None:
     logger.info(f"Found the following files: {streaming_files}")
 
     # Step 2: Load files into a DataFrame
-    df = load_files_into_dataframe(streaming_files)
-    print(df.loc[0])
+    raw_df = load_files_into_dataframe(streaming_files)
+
+    # Step 3: Process the DataFrame into more useable format
+    processed_df = clean_and_prepare_streaming_data(raw_df=raw_df)
+    print(processed_df.loc[0])
 
 
 if __name__ == "__main__":
