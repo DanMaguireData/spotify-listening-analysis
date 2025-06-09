@@ -18,9 +18,10 @@ Spotify API interactions, isolating network operations and API-specific logic
 from the core data pipeline.
 """
 
+import functools
 import logging
 import os
-from typing import Dict, List, Optional
+from typing import Any, Callable, Dict, List, Optional
 
 import spotipy
 from spotipy.oauth2 import SpotifyOAuth
@@ -115,106 +116,125 @@ class SpotipyClient:
             logging.critical(error_message)
             raise  # Re-raise any other unexpected exceptions
 
+    def _fetch_paginated_items(
+        self, initial_call: Callable[..., Dict[str, Any]], item_type: str
+    ) -> List[Dict]:
+        """
+        Generic private helper to fetch all items from paginated Spotify
+        API endpoints.
+
+        Args:
+            initial_call (Callable):
+              The Spotipy client method to call for the first page.
+              This function should return a dictionary with 'items'
+              and 'next' keys.
+              Example: `self.client.current_user_saved_tracks`
+            item_type (str):
+              A string describing the type of item being fetched
+              (e.g., "songs", "playlists") for use in logging messages.
+
+        Returns:
+            list:
+              A list of dictionaries, where each dictionary represents
+              an item.
+              Returns an empty list if no items are found or an error occurs.
+        """
+        all_items = []
+        logging.info(f"Starting to scrape user's {item_type}...")
+
+        try:
+            results = initial_call()
+            if not results or not results.get("items"):
+                logging.info(f"No {item_type} found or first page was empty.")
+                return []
+
+            all_items.extend(results["items"])
+            logging.debug(
+                f"Retrieved initial batch: {len(all_items)} {item_type}."
+            )
+
+            # Continue fetching pages as long as there's a 'next' URL
+            while results.get("next"):
+                results = self.client.next(results)
+                if not results or not results.get("items"):
+                    logging.debug(
+                        f"No more {item_type} in the current page. "
+                        "Exiting pagination."
+                    )
+                    break  # Break if a page is empty or malformed unexpectedly
+                all_items.extend(results["items"])
+                logging.debug(
+                    f"Retrieved total: {len(all_items)} {item_type}."
+                )
+
+        except spotipy.exceptions.SpotifyException as e:
+            logging.error(f"Spotify API error while fetching {item_type}: {e}")
+            return []
+        except Exception as e:
+            logging.error(
+                f"An unexpected error occurred while fetching {item_type}: {e}"
+            )
+            return []
+
+        logging.info(f"Successfully scraped {len(all_items)} {item_type}.")
+        return all_items
+
     def get_users_liked_songs(self) -> List[Dict]:
         """
         Retrieves all liked songs from the authenticated user's
         Spotify library.
 
-        Handles pagination automatically to fetch all available tracks.
-
         Returns:
             list:
               A list of dictionaries, where each dictionary represents
-              a liked song.
-              Returns an empty list if no songs are found or an error occurs.
+              a liked song. Returns an empty list if no songs are found
+              or an error occurs.
         """
-        all_liked_songs = []
-        logging.info("Starting to scrape user's liked songs...")
-
-        try:
-            results = self.client.current_user_saved_tracks()
-            if not results or not results.get("items"):
-                logging.info("No liked songs found or first page was empty.")
-                return []
-
-            all_liked_songs.extend(results["items"])
-            logging.debug(
-                f"Retrieved initial batch: {len(all_liked_songs)} songs."
-            )
-
-            # Continue fetching pages as long as there's a 'next' URL
-            while results.get("next"):
-                results = self.client.next(results)
-                if not results or not results.get("items"):
-                    logging.debug(
-                        "No more items in the current page. Exiting."
-                    )
-                    break  # Break if a page is empty or malformed unexpectedly
-                all_liked_songs.extend(results["items"])
-                logging.debug(
-                    f"Retrieved total: {len(all_liked_songs)} songs."
-                )
-
-        except spotipy.exceptions.SpotifyException as e:
-            logging.error(f"Spotify API error while fetching liked songs: {e}")
-            return []
-        except Exception as e:
-            logging.error(
-                f"An unexpected error occurred while fetching liked songs: {e}"
-            )
-            return []
-
-        logging.info(
-            f"Successfully scraped {len(all_liked_songs)} liked songs"
+        return self._fetch_paginated_items(
+            self.client.current_user_saved_tracks, "liked songs"
         )
-        return all_liked_songs
 
     def get_users_playlists(self) -> List[Dict]:
         """
-        Retrieves all users playlists from the authenticated user's
-        Spotify library.
-
-        Handles pagination automatically to fetch all available playlists
+        Retrieves all playlists created or followed by the authenticated user.
 
         Returns:
             list:
               A list of dictionaries, where each dictionary represents
-              the available data for a playlist
-              Returns an empty list if no playlists are found
-              or an error occurs.
+              a playlist.
+              Returns an empty list if no playlists are found or an
+              error occurs.
         """
-        all_playlists = []
-        logging.info("Starting to scrape user's playlists...")
-        try:
-            results = self.client.current_user_playlists()
-            if not results or not results.get("items"):
-                logging.info("No playlists found or first page was empty.")
-                return []
+        return self._fetch_paginated_items(
+            self.client.current_user_playlists, "playlists"
+        )
 
-            all_playlists.extend(results["items"])
-            logging.debug(
-                f"Retrieved initial batch: {len(all_playlists)} playlists."
-            )
+    def get_playlist_tracks(self, playlist_id: str) -> List[Dict]:
+        """
+        Retrieves all tracks from a specific Spotify playlist.
 
-            # Continue fetching pages as long as there's a 'next' URL
-            while results.get("next"):
-                results = self.client.next(results)
-                if not results or not results.get("items"):
-                    logging.debug(
-                        "No more items in the current page. Exiting."
-                    )
-                    break  # Break if a page is empty or malformed unexpectedly
-                all_playlists.extend(results["items"])
-                logging.debug(f"Retrieved total: {len(all_playlists)} songs.")
+        Args:
+            playlist_id (str): The Spotify ID of the playlist.
 
-        except spotipy.exceptions.SpotifyException as e:
-            logging.error(f"Spotify API error while fetching liked songs: {e}")
-            return []
-        except Exception as e:
-            logging.error(
-                f"An unexpected error occurred while fetching liked songs: {e}"
+        Returns:
+            list:
+              A list of dictionaries, where each dictionary represents a
+              track in the playlist.
+              Returns an empty list if no tracks are found or an error
+              occurs.
+        """
+        if not playlist_id:
+            logging.warning(
+                "Playlist ID is required to fetch playlist tracks."
             )
             return []
 
-        logging.info(f"Successfully scraped {len(all_playlists)} playlists")
-        return all_playlists
+        # Use functools.partial to create a callable that takes no arguments
+        # but already has playlist_id bound to it.
+        initial_call_with_id = functools.partial(
+            self.client.playlist_tracks, playlist_id
+        )
+
+        return self._fetch_paginated_items(
+            initial_call_with_id, f"tracks for playlist ID '{playlist_id}'"
+        )

@@ -22,8 +22,11 @@ def main():
     Entry point to script
     """
     client = SpotipyClient()
-    liked_songs = client.get_users_playlists()
-    print(liked_songs[0])
+    playlists = client.get_users_playlists()
+    playlist_id = playlists[0]["id"]
+
+    songs = client.get_playlist_tracks(playlist_id)
+    print(len(songs))
 
 
 if __name__ == "__main__":
