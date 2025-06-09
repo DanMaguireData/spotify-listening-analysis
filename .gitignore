@@ -197,3 +197,6 @@ cython_debug/
 data/*
 # But don't ignore the .gitkeep file, so the directory structure is preserved
 !data/.gitkeep
+
+# Environment variables
+.env

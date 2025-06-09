@@ -107,3 +107,31 @@ This project requires your **Extended Streaming History** data from Spotify. Her
             ```bash
             git commit --no-verify
             ```
+
+5.  **Configure Spotify API Credentials (Environment Variables):**
+    This project securely manages sensitive information like API keys using environment variables.
+
+    *   **Obtain Spotify API Credentials:**
+        1.  Go to your Spotify Developer Dashboard: [https://developer.spotify.com/dashboard/applications](https://developer.spotify.com/dashboard/applications)
+        2.  Log in or create an account.
+        3.  Create a new application or select an existing one.
+        4.  Note down your `Client ID` and `Client Secret`.
+        5.  In your application settings, under "Redirect URIs," add `http://localhost:8890/` (or your preferred redirect URI). This is crucial for the OAuth flow.
+
+    *   **Set up your `.env` file:**
+        A template file, `.env.example`, is provided in the project root. This file shows you which environment variables are needed.
+
+        1.  **Copy the example file:**
+            ```bash
+            cp .env.example .env
+            ```
+        2.  **Edit the `.env` file:** Open the newly created `.env` file in your text editor and replace the placeholder values (`your_spotify_client_id_here`, `your_spotify_client_secret_here`) with your actual Spotify credentials. You can also customize `SPOTIPY_REDIRECT_URI` and `SPOTIPY_SCOPE` if needed.
+
+        ```ini
+        # Example of your .env file (DO NOT COMMIT THIS FILE!)
+        SPOTIPY_CLIENT_ID=your_actual_client_id
+        SPOTIPY_CLIENT_SECRET=your_actual_client_secret
+        SPOTIPY_REDIRECT_URI=http://localhost:8890/
+        SPOTIPY_SCOPE=user-library-read
+        ```
+        **Important:** The `.env` file is explicitly excluded from version control (`.gitignore`) to protect your sensitive data. **Do NOT commit your `.env` file.**
