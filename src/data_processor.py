@@ -1,8 +1,7 @@
-"""
-Data processing and cleaning utilities for Spotify streaming history.
+"""Data processing and cleaning utilities for Spotify streaming history.
 
-This module is responsible for transforming raw Spotify streaming data
-into a clean, structured, and analysis-ready format
+This module is responsible for transforming raw Spotify streaming data into a
+clean, structured, and analysis-ready format
 """
 
 import logging
@@ -10,6 +9,9 @@ from typing import Dict, List
 
 import numpy as np
 import pandas as pd
+
+# Logger
+logger = logging.getLogger(__name__)
 
 # --- Column Names (Input from raw data) ---
 # These are the expected column names in the raw Spotify JSON data
@@ -70,8 +72,7 @@ FINAL_COLUMNS_ORDER: List[str] = [
 
 
 def _create_full_track_name_column(df: pd.DataFrame) -> pd.DataFrame:
-    """
-    Creates a 'full_track_name' column by combining artist and track name.
+    """Creates a 'full_track_name' column by combining artist and track name.
     Handles cases where source columns are missing or not strings.
 
     This function attempts to replicate the original notebook's behavior
@@ -86,7 +87,7 @@ def _create_full_track_name_column(df: pd.DataFrame) -> pd.DataFrame:
     Returns:
         A DataFrame with the new `PROCESSED_FULL_TRACK_NAME_COL` column.
     """
-    logging.debug("Creating '%s' column.", PROCESSED_FULL_TRACK_NAME_COL)
+    logger.debug("Creating '%s' column.", PROCESSED_FULL_TRACK_NAME_COL)
 
     # Condition to identify rows where both track
     # name and artist are valid strings
@@ -109,10 +110,9 @@ def _create_full_track_name_column(df: pd.DataFrame) -> pd.DataFrame:
 
 
 def _filter_non_music_streams(df: pd.DataFrame) -> pd.DataFrame:
-    """
-    Filters out entries identified as non-music streams
-    (e.g., podcasts, audiobooks). This includes rows
-    where `PROCESSED_FULL_TRACK_NAME_COL` is NaN.
+    """Filters out entries identified as non-music streams (e.g., podcasts,
+    audiobooks). This includes rows where `PROCESSED_FULL_TRACK_NAME_COL` is
+    NaN.
 
     Args:
         df: The DataFrame with a `PROCESSED_FULL_TRACK_NAME_COL` column.
@@ -120,7 +120,7 @@ def _filter_non_music_streams(df: pd.DataFrame) -> pd.DataFrame:
     Returns:
         A DataFrame containing only music streams.
     """
-    logging.debug("Filtering non-music streams and null track names.")
+    logger.debug("Filtering non-music streams and null track names.")
 
     initial_count = len(df)
     filtered_df = df.copy()
@@ -130,7 +130,7 @@ def _filter_non_music_streams(df: pd.DataFrame) -> pd.DataFrame:
         filtered_df = filtered_df[
             filtered_df[PROCESSED_FULL_TRACK_NAME_COL].notna()
         ]
-        logging.debug(
+        logger.debug(
             "Removed %d rows with null '%s'.",
             initial_count - len(filtered_df),
             PROCESSED_FULL_TRACK_NAME_COL,
@@ -138,20 +138,18 @@ def _filter_non_music_streams(df: pd.DataFrame) -> pd.DataFrame:
         initial_count = len(filtered_df)  # Update count after first filter
 
     else:
-        logging.warning(
+        logger.warning(
             "Column '%s' not found for filtering. "
             "Skipping non-music filtering.",
             PROCESSED_FULL_TRACK_NAME_COL,
         )
 
-    logging.info("Filtered data. Remaining records: %d.", len(filtered_df))
+    logger.info("Filtered data. Remaining records: %d.", len(filtered_df))
     return filtered_df
 
 
 def _rename_columns(df: pd.DataFrame) -> pd.DataFrame:
-    """
-    Renames columns in the DataFrame according to the
-    `COLUMN_RENAME_MAP`.
+    """Renames columns in the DataFrame according to the `COLUMN_RENAME_MAP`.
 
     Args:
         df: The input DataFrame.
@@ -159,22 +157,19 @@ def _rename_columns(df: pd.DataFrame) -> pd.DataFrame:
     Returns:
         A DataFrame with renamed columns.
     """
-    logging.debug("Renaming columns.")
+    logger.debug("Renaming columns.")
     # Check if columns to be renamed exist before renaming
     cols_to_rename = {
         k: v for k, v in COLUMN_RENAME_MAP.items() if k in df.columns
     }
     renamed_df = df.rename(columns=cols_to_rename)
-    logging.debug("Columns renamed: %s", cols_to_rename)
+    logger.debug("Columns renamed: %s", cols_to_rename)
     return renamed_df.copy()
 
 
 def _extract_track_id(df: pd.DataFrame) -> pd.DataFrame:
-    """
-    Extracts the Spotify track ID from
-    `RAW_SPOTIFY_URI_COL` and creates a new
-    `PROCESSED_TRACK_ID_COL` column.
-    Handles missing URIs gracefully.
+    """Extracts the Spotify track ID from `RAW_SPOTIFY_URI_COL` and creates a
+    new `PROCESSED_TRACK_ID_COL` column. Handles missing URIs gracefully.
 
     Args:
         df: The DataFrame containing a `RAW_SPOTIFY_URI_COL` column.
@@ -182,7 +177,7 @@ def _extract_track_id(df: pd.DataFrame) -> pd.DataFrame:
     Returns:
         A DataFrame with the new `PROCESSED_TRACK_ID_COL` column.
     """
-    logging.debug("Extracting track IDs from URIs.")
+    logger.debug("Extracting track IDs from URIs.")
 
     # Extract the song ID from the raw field
     df[PROCESSED_TRACK_ID_COL] = (
@@ -201,10 +196,9 @@ def _extract_track_id(df: pd.DataFrame) -> pd.DataFrame:
 
 
 def _select_and_reorder_columns(df: pd.DataFrame) -> pd.DataFrame:
-    """
-    Selects a predefined set of columns (`FINAL_COLUMNS_ORDER`)
-    and reorders them. Missing expected columns will be logged
-    as warnings and omitted from the final DataFrame.
+    """Selects a predefined set of columns (`FINAL_COLUMNS_ORDER`) and reorders
+    them. Missing expected columns will be logged as warnings and omitted from
+    the final DataFrame.
 
     Args:
         df: The DataFrame with columns to select and reorder.
@@ -212,12 +206,12 @@ def _select_and_reorder_columns(df: pd.DataFrame) -> pd.DataFrame:
     Returns:
         A DataFrame with selected and reordered columns.
     """
-    logging.debug("Selecting and reordering final columns.")
+    logger.debug("Selecting and reordering final columns.")
     # Ensure all required columns exist before attempting to select
     existing_cols = [col for col in FINAL_COLUMNS_ORDER if col in df.columns]
     missing_cols = set(FINAL_COLUMNS_ORDER) - set(existing_cols)
     if missing_cols:
-        logging.warning(
+        logger.warning(
             "Missing expected columns in DataFrame for final selection: %s. "
             "They will not be included.",
             missing_cols,
@@ -228,8 +222,7 @@ def _select_and_reorder_columns(df: pd.DataFrame) -> pd.DataFrame:
 
 
 def clean_and_prepare_streaming_data(raw_df: pd.DataFrame) -> pd.DataFrame:
-    """
-    Processes raw Spotify streaming history data by cleaning, filtering,
+    """Processes raw Spotify streaming history data by cleaning, filtering,
     renaming columns, and extracting derived information.
 
     This function orchestrates a series of transformations:
@@ -252,12 +245,12 @@ def clean_and_prepare_streaming_data(raw_df: pd.DataFrame) -> pd.DataFrame:
         filtered out.
     """
     if raw_df.empty:
-        logging.warning(
+        logger.warning(
             "Input DataFrame is empty, returning an empty DataFrame."
         )
         return pd.DataFrame()
 
-    logging.info(
+    logger.info(
         "Starting data cleaning and preparation process. Initial records: %d.",
         len(raw_df),
     )
@@ -271,7 +264,7 @@ def clean_and_prepare_streaming_data(raw_df: pd.DataFrame) -> pd.DataFrame:
         .pipe(_select_and_reorder_columns)
     )
 
-    logging.info(
+    logger.info(
         "Data cleaning and preparation complete. Final records: %d.",
         len(processed_df),
     )

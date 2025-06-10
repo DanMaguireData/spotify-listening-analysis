@@ -15,6 +15,9 @@ DATA_DIR = "./data/"
 EXPECTED_FILE_PREFIX = "Streaming_History_"
 EXPECXED_FILE_TYPE = ".json"
 
+# Logger
+logger = logging.getLogger(__name__)
+
 
 def check_filename_valid(filename: str) -> bool:
     """Validates if the given filename conforms to the expected Spotify
@@ -53,13 +56,13 @@ def list_streaming_files() -> List[str]:
     file_list = list(os.listdir(DATA_DIR))
     valid_files = [file for file in file_list if check_filename_valid(file)]
     if not valid_files:
-        logging.info(
+        logger.info(
             "No valid streaming history files (e.g.,"
             f"{EXPECTED_FILE_PREFIX}*.{EXPECXED_FILE_TYPE})"
             f" found in '{DATA_DIR}'."
         )
     else:
-        logging.info(f"Found {len(valid_files)} files in {DATA_DIR}")
+        logger.info(f"Found {len(valid_files)} files in {DATA_DIR}")
     # Add in the data directory to each filename and return list]
     return [os.path.join(DATA_DIR, file) for file in valid_files]
 
@@ -83,16 +86,16 @@ def load_file_contents_into_dataframe(
             file_content = json.load(file)
     # If no file throw Error
     except FileNotFoundError:
-        logging.error(f"File not found at {file_path}")
+        logger.error(f"File not found at {file_path}")
         return None
     # Catch Other issues
     except Exception as e:
-        logging.error(f"Error occurred reading {file_path}: {e}")
+        logger.error(f"Error occurred reading {file_path}: {e}")
         return None
 
     # Load into DataFrame
     file_df = pd.DataFrame(file_content)
-    logging.debug(f"Loaded {len(file_df)} records from {file_path}")
+    logger.debug(f"Loaded {len(file_df)} records from {file_path}")
     return file_df
 
 
@@ -110,7 +113,7 @@ def load_files_into_dataframe(file_paths: List[str]) -> pd.DataFrame:
         dfs.append(load_file_contents_into_dataframe(file_path))
     # Concat files and reset the index
     stream_df = pd.concat(dfs).reset_index(drop=True)
-    logging.info(
+    logger.info(
         f"Loaded {len(stream_df)} records from {len(file_paths)} files"
     )
     return stream_df

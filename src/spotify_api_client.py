@@ -26,6 +26,9 @@ from typing import Any, Callable, Dict, List, Optional
 import spotipy
 from spotipy.oauth2 import SpotifyOAuth
 
+# Logger
+logger = logging.getLogger(__name__)
+
 
 class SpotipyClient:
     """Client for accessing the spotify python class."""
@@ -69,7 +72,7 @@ class SpotipyClient:
             spotipy.exceptions.SpotifyException:
               If there's an issue during Spotify authentication.
         """
-        logging.debug("Attempting to initialize SpotipyClient...")
+        logger.debug("Attempting to initialize SpotipyClient...")
 
         # Prioritize arguments, then environment variables,
         # then sensible defaults
@@ -89,7 +92,7 @@ class SpotipyClient:
                 "either as arguments or via SPOTIPY_CLIENT_ID and "
                 "SPOTIPY_CLIENT_SECRET environment variables."
             )
-            logging.critical(error_msg)
+            logger.critical(error_msg)
             raise ValueError(error_msg)
 
         try:
@@ -102,15 +105,15 @@ class SpotipyClient:
                     scope=self._scope,
                 )
             )
-            logging.info("SpotipyClient initialized successfully.")
+            logger.info("SpotipyClient initialized successfully.")
         except spotipy.exceptions.SpotifyException as e:
-            logging.critical(f"Spotify authentication failed: {e}")
+            logger.critical(f"Spotify authentication failed: {e}")
             raise  # Re-raise the specific Spotify exception
         except Exception as e:
             error_message = (
                 f"Unexpected error occurred during client initialization: {e}"
             )
-            logging.critical(error_message)
+            logger.critical(error_message)
             raise  # Re-raise any other unexpected exceptions
 
     def _fetch_paginated_items(
@@ -136,16 +139,16 @@ class SpotipyClient:
               Returns an empty list if no items are found or an error occurs.
         """
         all_items = []
-        logging.debug(f"Starting to scrape user's {item_type}...")
+        logger.debug(f"Starting to scrape user's {item_type}...")
 
         try:
             results = initial_call()
             if not results or not results.get("items"):
-                logging.info(f"No {item_type} found or first page was empty.")
+                logger.info(f"No {item_type} found or first page was empty.")
                 return []
 
             all_items.extend(results["items"])
-            logging.debug(
+            logger.debug(
                 f"Retrieved initial batch: {len(all_items)} {item_type}."
             )
 
@@ -153,26 +156,24 @@ class SpotipyClient:
             while results.get("next"):
                 results = self.client.next(results)
                 if not results or not results.get("items"):
-                    logging.debug(
+                    logger.debug(
                         f"No more {item_type} in the current page. "
                         "Exiting pagination."
                     )
                     break  # Break if a page is empty or malformed unexpectedly
                 all_items.extend(results["items"])
-                logging.debug(
-                    f"Retrieved total: {len(all_items)} {item_type}."
-                )
+                logger.debug(f"Retrieved total: {len(all_items)} {item_type}.")
 
         except spotipy.exceptions.SpotifyException as e:
-            logging.error(f"Spotify API error while fetching {item_type}: {e}")
+            logger.error(f"Spotify API error while fetching {item_type}: {e}")
             return []
         except Exception as e:
-            logging.error(
+            logger.error(
                 f"An unexpected error occurred while fetching {item_type}: {e}"
             )
             return []
 
-        logging.debug(f"Successfully scraped {len(all_items)} {item_type}.")
+        logger.debug(f"Successfully scraped {len(all_items)} {item_type}.")
         return all_items
 
     def get_users_liked_songs(self) -> List[Dict]:
@@ -262,14 +263,14 @@ class SpotipyClient:
             # tracks using "tracks" key
             return track_data["tracks"]
         except spotipy.exceptions.SpotifyException as e:
-            logging.error(
+            logger.error(
                 "Spotify API error while fetching track "
                 f"info for IDs {track_ids}: {e}"
             )
             return []
         except Exception as e:
             # Catch any other unexpected errors
-            logging.error(
+            logger.error(
                 "An unexpected error occurred while fetching track"
                 f" info for IDs {track_ids}: {e}"
             )
@@ -293,7 +294,7 @@ class SpotipyClient:
               or if significant errors occur during batch processing.
         """
         if not track_ids:
-            logging.info(
+            logger.info(
                 "No track IDs provided to get_track_info_in_batches. "
                 "Returning empty list."
             )
@@ -305,7 +306,7 @@ class SpotipyClient:
             50  # Max allowed by get_track_info_by_ids for a single call
         )
 
-        logging.info(
+        logger.info(
             f"Starting to retrieve info for {total_ids}"
             f" tracks in batches of {batch_size}."
         )
@@ -315,11 +316,11 @@ class SpotipyClient:
             for idx in range(0, total_ids, batch_size):
                 current_batch_ids = track_ids[idx : idx + batch_size]
 
-                # Calculate batch number for logging
+                # Calculate batch number for logger
                 batch_number = (idx // batch_size) + 1
                 total_batches = math.ceil(total_ids / batch_size)
 
-                logging.debug(
+                logger.debug(
                     f"Processing batch {batch_number}/{total_batches}"
                     f" with {len(current_batch_ids)} IDs."
                 )
@@ -334,7 +335,7 @@ class SpotipyClient:
         except Exception as e:
             # This 'catch-all' here is for errors in the batching logic itself,
             # as get_track_info_by_ids handles API errors.
-            logging.error(
+            logger.error(
                 "An unexpected error occurred during batch "
                 f"processing tracks: {e}"
             )
@@ -344,7 +345,7 @@ class SpotipyClient:
             # large operations.
             return all_retrieved_tracks if all_retrieved_tracks else []
 
-        logging.info(
+        logger.info(
             f"Finished retrieving info for {len(all_retrieved_tracks)}"
             f" valid tracks from {total_ids} requested IDs."
         )

@@ -28,6 +28,9 @@ from typing import Any, Dict, List, Optional, Union
 import numpy as np
 import pandas as pd
 
+# Logger
+logger = logging.getLogger(__name__)
+
 
 class SpotifyApiDataProcessor:
     """A class responsible for processing raw Spotify API data into structured
@@ -38,7 +41,7 @@ class SpotifyApiDataProcessor:
 
         No specific configuration needed for basic track processing.
         """
-        logging.debug("SpotifyDataProcessor initialized.")
+        logger.debug("SpotifyDataProcessor initialized.")
 
     # TODO: Reduce function complexity
     def _extract_track_features(
@@ -162,7 +165,7 @@ class SpotifyApiDataProcessor:
                           extracted.
         """
         if not isinstance(raw_tracks_data, list) or not raw_tracks_data:
-            logging.info(
+            logger.info(
                 "No raw track data provided for processing."
                 "Returning empty DataFrame."
             )
@@ -170,7 +173,7 @@ class SpotifyApiDataProcessor:
                 pd.DataFrame()
             )  # Return empty DataFrame if input is invalid or empty
 
-        logging.info(
+        logger.info(
             f"Starting to process {len(raw_tracks_data)} "
             "raw track entries into DataFrame."
         )
@@ -190,13 +193,13 @@ class SpotifyApiDataProcessor:
                 ):  # Only append if features were successfully extracted
                     processed_records.append(extracted_features)
             else:
-                logging.warning(
+                logger.warning(
                     f"Item {idx} in raw_tracks_data was not a "
                     f"valid track dictionary or item. Skipping: {track_dict}"
                 )
 
         if not processed_records:
-            logging.debug(
+            logger.debug(
                 "No valid track records extracted after processing. "
                 "Returning empty DataFrame."
             )
@@ -208,13 +211,13 @@ class SpotifyApiDataProcessor:
         # Add the source_playlist column if provided
         if source_playlist:
             df["playlists"] = source_playlist
-            logging.debug(
+            logger.debug(
                 f"Added 'playlists' column with value '{source_playlist}'."
             )
         else:
             df["playlists"] = np.nan
 
-        logging.debug(
+        logger.debug(
             f"Successfully processed {len(processed_records)} tracks "
             f"into a DataFrame with {len(df.columns)} columns."
         )
@@ -272,7 +275,7 @@ class SpotifyApiDataProcessor:
                 after aggregation.
         """
         if not isinstance(list_of_track_dfs, list) or not list_of_track_dfs:
-            logging.info(
+            logger.info(
                 "No DataFrames provided for aggregation. "
                 "Returning empty DataFrame."
             )
@@ -286,13 +289,13 @@ class SpotifyApiDataProcessor:
         ]
 
         if not valid_dfs:
-            logging.info(
+            logger.info(
                 "No valid (non-empty) DataFrames found in the input "
                 "list. Returning empty DataFrame."
             )
             return pd.DataFrame()
 
-        logging.info(
+        logger.info(
             f"Aggregating {len(valid_dfs)} DataFrames, containing a total of "
             f"{sum(len(df) for df in valid_dfs)} rows before de-duplication."
         )
@@ -332,13 +335,13 @@ class SpotifyApiDataProcessor:
                     column="album_artwork_url", aggfunc="first"
                 ),
             )
-            logging.info(
+            logger.info(
                 f"Aggregation complete. Reduced to {len(aggregated_df)} "
                 "unique tracks."
             )
             return aggregated_df
         except Exception as e:
-            logging.error(
+            logger.error(
                 f"An error occurred during DataFrame aggregation: {e}"
             )
             return pd.DataFrame()
