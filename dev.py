@@ -1,10 +1,10 @@
-"""Temporary script being used to develop out functionality"""
+"""Temporary script being used to develop out functionality."""
 
 import logging
 
 from dotenv import load_dotenv
 
-from src.spotify_client import SpotipyClient
+from src.spotify_api_client import SpotipyClient
 
 load_dotenv()  # Load environment variables from .env file
 
@@ -18,9 +18,7 @@ logger = logging.getLogger(__name__)  # Logger for this specific script
 
 
 def main():
-    """
-    Entry point to script
-    """
+    """Entry point to script."""
     client = SpotipyClient()
     playlists = client.get_users_playlists()
     playlist_id = playlists[0]["id"]

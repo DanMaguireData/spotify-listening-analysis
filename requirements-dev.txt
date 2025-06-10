@@ -1,1 +1,2 @@
+docformatter
 pre-commit

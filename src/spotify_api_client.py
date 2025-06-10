@@ -1,5 +1,4 @@
-"""
-Spotify Web API client and data fetching utilities.
+"""Spotify Web API client and data fetching utilities.
 
 This module provides an interface for interacting with the Spotify Web API
 using the `spotipy` library. It focuses on abstracting API requests to fetch
@@ -20,6 +19,7 @@ from the core data pipeline.
 
 import functools
 import logging
+import math
 import os
 from typing import Any, Callable, Dict, List, Optional
 
@@ -28,9 +28,7 @@ from spotipy.oauth2 import SpotifyOAuth
 
 
 class SpotipyClient:
-    """
-    Client for accessing the spotify python class
-    """
+    """Client for accessing the spotify python class."""
 
     client: spotipy.Spotify
 
@@ -46,8 +44,7 @@ class SpotipyClient:
         redirect_uri: Optional[str] = None,
         scope: Optional[str] = None,
     ):
-        """
-        Initializes the SpotipyClient instance.
+        """Initializes the SpotipyClient instance.
 
         Args:
             client_id (str, optional):
@@ -119,9 +116,8 @@ class SpotipyClient:
     def _fetch_paginated_items(
         self, initial_call: Callable[..., Dict[str, Any]], item_type: str
     ) -> List[Dict]:
-        """
-        Generic private helper to fetch all items from paginated Spotify
-        API endpoints.
+        """Generic private helper to fetch all items from paginated Spotify API
+        endpoints.
 
         Args:
             initial_call (Callable):
@@ -140,7 +136,7 @@ class SpotipyClient:
               Returns an empty list if no items are found or an error occurs.
         """
         all_items = []
-        logging.info(f"Starting to scrape user's {item_type}...")
+        logging.debug(f"Starting to scrape user's {item_type}...")
 
         try:
             results = initial_call()
@@ -176,13 +172,12 @@ class SpotipyClient:
             )
             return []
 
-        logging.info(f"Successfully scraped {len(all_items)} {item_type}.")
+        logging.debug(f"Successfully scraped {len(all_items)} {item_type}.")
         return all_items
 
     def get_users_liked_songs(self) -> List[Dict]:
-        """
-        Retrieves all liked songs from the authenticated user's
-        Spotify library.
+        """Retrieves all liked songs from the authenticated user's Spotify
+        library.
 
         Returns:
             list:
@@ -195,8 +190,8 @@ class SpotipyClient:
         )
 
     def get_users_playlists(self) -> List[Dict]:
-        """
-        Retrieves all playlists created or followed by the authenticated user.
+        """Retrieves all playlists created or followed by the authenticated
+        user.
 
         Returns:
             list:
@@ -210,8 +205,7 @@ class SpotipyClient:
         )
 
     def get_playlist_tracks(self, playlist_id: str) -> List[Dict]:
-        """
-        Retrieves all tracks from a specific Spotify playlist.
+        """Retrieves all tracks from a specific Spotify playlist.
 
         Args:
             playlist_id (str): The Spotify ID of the playlist.
@@ -223,12 +217,6 @@ class SpotipyClient:
               Returns an empty list if no tracks are found or an error
               occurs.
         """
-        if not playlist_id:
-            logging.warning(
-                "Playlist ID is required to fetch playlist tracks."
-            )
-            return []
-
         # Use functools.partial to create a callable that takes no arguments
         # but already has playlist_id bound to it.
         initial_call_with_id = functools.partial(
@@ -238,3 +226,126 @@ class SpotipyClient:
         return self._fetch_paginated_items(
             initial_call_with_id, f"tracks for playlist ID '{playlist_id}'"
         )
+
+    def get_track_info_by_ids(self, track_ids: List[str]) -> List[Dict]:
+        """Retrieves tracks based on the IDs that are passed to the function.
+
+        Args:
+          track_ids:
+            A list of track IDs, must be less that 50 in length due to
+            API limits
+
+        Returns:
+          list:
+            A list of dictionaries, where each dictionary represents a
+            track returned from the API for the provided IDs.
+            Returns an empty list if no tracks are found or an error
+            occurs.
+
+        Raises:
+          ValueError:
+              If more than 50 track IDs are passed in the args, this
+              exceeds the API limits
+        """
+
+        if len(track_ids) == 0:
+            return []
+        if len(track_ids) > 50:
+            raise ValueError(
+                f"Provided list of IDs ({len(track_ids)}) "
+                "exceeds maximum amount (50)"
+            )
+        # Fetch Tracks
+        try:
+            track_data = self.client.tracks(track_ids)
+            # Data returned as as Dict, we want the list of
+            # tracks using "tracks" key
+            return track_data["tracks"]
+        except spotipy.exceptions.SpotifyException as e:
+            logging.error(
+                "Spotify API error while fetching track "
+                f"info for IDs {track_ids}: {e}"
+            )
+            return []
+        except Exception as e:
+            # Catch any other unexpected errors
+            logging.error(
+                "An unexpected error occurred while fetching track"
+                f" info for IDs {track_ids}: {e}"
+            )
+            return []
+
+    def get_track_info_in_batches(self, track_ids: List[str]) -> List[Dict]:
+        """Retrieves detailed information for a potentially large list of
+        Spotify track IDs by automatically splitting them into batches of 50 to
+        adhere to Spotify API limits.
+
+        This method handles the batching transparently for the user.
+
+        Args:
+            track_ids (List[str]): A list of Spotify track IDs of any length.
+
+        Returns:
+            List[Dict]:
+              A list of dictionaries, where each dictionary represents a
+              track's detailed information. Returns an empty list if
+              no valid tracks are found for the given IDs across all batches,
+              or if significant errors occur during batch processing.
+        """
+        if not track_ids:
+            logging.info(
+                "No track IDs provided to get_track_info_in_batches. "
+                "Returning empty list."
+            )
+            return []
+
+        all_retrieved_tracks = []
+        total_ids = len(track_ids)
+        batch_size = (
+            50  # Max allowed by get_track_info_by_ids for a single call
+        )
+
+        logging.info(
+            f"Starting to retrieve info for {total_ids}"
+            f" tracks in batches of {batch_size}."
+        )
+
+        try:
+            # Iterate through the track_ids list, taking chunks of batch_size
+            for idx in range(0, total_ids, batch_size):
+                current_batch_ids = track_ids[idx : idx + batch_size]
+
+                # Calculate batch number for logging
+                batch_number = (idx // batch_size) + 1
+                total_batches = math.ceil(total_ids / batch_size)
+
+                logging.debug(
+                    f"Processing batch {batch_number}/{total_batches}"
+                    f" with {len(current_batch_ids)} IDs."
+                )
+
+                # Call the underlying function which already handles its own
+                # errors and filtering
+                batch_results = self.get_track_info_by_ids(current_batch_ids)
+
+                # Extend the overall list with results from the current batch
+                all_retrieved_tracks.extend(batch_results)
+
+        except Exception as e:
+            # This 'catch-all' here is for errors in the batching logic itself,
+            # as get_track_info_by_ids handles API errors.
+            logging.error(
+                "An unexpected error occurred during batch "
+                f"processing tracks: {e}"
+            )
+            # Decide if you want to return partial results or raise the
+            # exception.
+            # Returning partial results is often more user-friendly for
+            # large operations.
+            return all_retrieved_tracks if all_retrieved_tracks else []
+
+        logging.info(
+            f"Finished retrieving info for {len(all_retrieved_tracks)}"
+            f" valid tracks from {total_ids} requested IDs."
+        )
+        return all_retrieved_tracks

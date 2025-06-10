@@ -1,5 +1,4 @@
-"""
-Main entry point and orchestration script for the Spotify analysis.
+"""Main entry point and orchestration script for the Spotify analysis.
 
 This script manages the end-to-end workflow for analyzing personal Spotify
 extended streaming history data. It handles command-line argument parsing,
@@ -13,8 +12,13 @@ placed in the 'data/' directory
 import logging
 import sys
 
+from dotenv import load_dotenv
+
 from src.data_processor import clean_and_prepare_streaming_data
 from src.file_io import list_streaming_files, load_files_into_dataframe
+from src.spotify_api_client import SpotipyClient
+from src.spotify_api_data_processor import SpotifyApiDataProcessor
+from src.spotify_api_pipeline import get_unified_spotify_track_data
 
 # Setup Logger
 logging.basicConfig(
@@ -25,10 +29,11 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)  # Logger for this specific script
 
 
+load_dotenv()  # Load environment variables from .env file
+
+
 def main() -> None:
-    """
-    Runs analysis
-    """
+    """Runs analysis."""
     logger.info("Starting Spotify data analysis script.")
 
     # Step 1: Check files exist
@@ -48,7 +53,22 @@ def main() -> None:
 
     # Step 3: Process the DataFrame into more useable format
     processed_df = clean_and_prepare_streaming_data(raw_df=raw_df)
-    print(processed_df.loc[0])
+
+    # Step 4: Setup Spotify Client + Data Processor
+    spotify_client = SpotipyClient()
+    spotify_api_processor = SpotifyApiDataProcessor()
+
+    # Step 4: Fetch, process, and unify all track metadata from
+    # the Spotify API
+    unified_api_df = get_unified_spotify_track_data(
+        client=spotify_client,
+        processor=spotify_api_processor,
+        streaming_history_df=processed_df,
+    )
+    unified_api_df.to_csv("data/test.csv")
+    logger.info(
+        f"Gathered information on {len(unified_api_df)} songs from API"
+    )
 
 
 if __name__ == "__main__":

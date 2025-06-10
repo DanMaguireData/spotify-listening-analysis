@@ -1,8 +1,7 @@
-"""
-File I/O operations for the Spotify data analysis project.
+"""File I/O operations for the Spotify data analysis project.
 
-This module handles tasks related to finding, validating, and loading
-Spotify streaming history files from the local filesystem.
+This module handles tasks related to finding, validating, and loading Spotify
+streaming history files from the local filesystem.
 """
 
 import json
@@ -18,8 +17,7 @@ EXPECXED_FILE_TYPE = ".json"
 
 
 def check_filename_valid(filename: str) -> bool:
-    """
-    Validates if the given filename conforms to the expected Spotify
+    """Validates if the given filename conforms to the expected Spotify
     extended streaming history file format.
 
     The function checks for two conditions:
@@ -42,9 +40,8 @@ def check_filename_valid(filename: str) -> bool:
 
 
 def list_streaming_files() -> List[str]:
-    """
-    Lists files available in directory, running checks to ensure they
-    conform to the expected file format
+    """Lists files available in directory, running checks to ensure they
+    conform to the expected file format.
 
     Args:
         None
@@ -70,9 +67,8 @@ def list_streaming_files() -> List[str]:
 def load_file_contents_into_dataframe(
     file_path: str,
 ) -> Optional[pd.DataFrame]:
-    """
-    Loads contents of the specified streaming file into
-    a pandas DataFrame for downstream analysis
+    """Loads contents of the specified streaming file into a pandas DataFrame
+    for downstream analysis.
 
     Args:
         file_path: String dentoing the path to the file that we will load
@@ -96,13 +92,12 @@ def load_file_contents_into_dataframe(
 
     # Load into DataFrame
     file_df = pd.DataFrame(file_content)
-    logging.info(f"Loaded {len(file_df)} records from {file_path}")
+    logging.debug(f"Loaded {len(file_df)} records from {file_path}")
     return file_df
 
 
 def load_files_into_dataframe(file_paths: List[str]) -> pd.DataFrame:
-    """
-    Loads the contents of multiple streaming files into a single DataFrame
+    """Loads the contents of multiple streaming files into a single DataFrame.
 
     Args:
         file_paths: A list of paths to the streaming files to be loaded
