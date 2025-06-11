@@ -58,17 +58,29 @@ def main() -> None:
     spotify_client = SpotipyClient()
     spotify_api_processor = SpotifyApiDataProcessor()
 
-    # Step 4: Fetch, process, and unify all track metadata from
+    # Step 5: Fetch, process, and unify all track metadata from
     # the Spotify API
     unified_api_df = get_unified_spotify_track_data(
         client=spotify_client,
         processor=spotify_api_processor,
         streaming_history_df=processed_df,
     )
-    unified_api_df.to_csv("data/test.csv")
+    # Safegaurd if API calls fail
+    if len(unified_api_df) == 0:
+        logger.error("Failed to gather track data from API")
+        raise Exception("Failed to gather data from API")
     logger.info(
         f"Gathered information on {len(unified_api_df)} songs from API"
     )
+
+    # Step 6: Combine data sources
+    full_track_df = processed_df.merge(
+        unified_api_df.drop(columns=["track_name", "album_name"]),
+        how="left",
+        on="track_id",
+    )
+    full_track_df.to_csv("data/merged.csv")
+    logger.info("Merged API data with streming data")
 
 
 if __name__ == "__main__":
