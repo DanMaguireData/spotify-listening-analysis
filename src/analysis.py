@@ -1,133 +1,145 @@
-"""
-Functions for analyzing Spotify streaming data and deriving insights.
+"""Functions for analyzing Spotify streaming data and deriving insights.
 
-This module contains the core analytical logic for the Spotify Deep
-Dive project. It operates on cleaned and processed streaming history
-data, focusing on calculating custom metrics, identifying listening
-patterns, and generating meaningful insights.
-
-Key functionalities include:
-  - Calculating custom enjoyment scores for individual tracks.
-  - Identifying top-listened tracks, artists, and albums.
-
-The functions within this module are designed to take a Pandas DataFrame
-(typically prepared by `src.data_processor`) as input and return either
-modified DataFrames with new analytical columns or aggregated summary
-DataFrames.
+... (your module docstring) ...
 """
 
-from typing import Set, Union
+import logging
+from typing import Set
 
 import numpy as np
+import pandas as pd
+from sklearn.preprocessing import MinMaxScaler
 
-# --- Constants for End Reason Scores ---
-POSITIVE_END_REASONS: Set[str] = {"trackdone", "endplay"}
-NEGATIVE_END_REASONS = {"fwdbtn", "backbtn", "nextbtn", "clickrow"}
+logger = logging.getLogger(__name__)
 
-# --- Constants for Start Reason Score ---
-POSITIVE_START_REASONS = {"clickrow", "backbtn", "playbtn"}
+# --- Constants for Scoring Logic ---
+# These constants are well-defined and perfect as they are.
+POSITIVE_END_REASONS: Set[str] = {"trackdone"}
+NEGATIVE_END_REASONS: Set[str] = {"fwdbtn", "backbtn"}
+POSITIVE_START_REASONS: Set[str] = {"clickrow", "playbtn", "backbtn"}
+TRACK_RESTART_REASON: str = "backbtn"
 
-# Threshold for fractional play to reduce penalty
-HIGH_FRACTION_PLAYED_THRESHOLD = 0.85
+HIGH_FRACTION_PLAYED_THRESHOLD: float = 0.85
 
-# Score values
-SCORE_VERY_POSITIVE = 1.5
-SCORE_POSITIVE = 1.0
-SCORE_NEGATIVE = -1.0
-SCORE_NEGATIVE_HIGH_FRACTION_PLAYED = -0.5
-SCORE_NEUTRAL = 0.0
+SCORE_VERY_POSITIVE: float = 1.5
+SCORE_POSITIVE: float = 1.0
+SCORE_NEGATIVE: float = -1.0
+SCORE_NEGATIVE_HIGH_FRACTION_PLAYED: float = -0.5
+SCORE_NEUTRAL: float = 0.0
 
-
-def _calculate_end_reason_score_single(
-    reason_end: Union[str, float],  # float to account for np.nan
-    fraction_played: float,  # np.number for numpy's float types
-) -> float:
-    """
-    Calculates a score based on the reason a track ended and the fraction
-    played.
-
-    This is a helper function designed for row-wise application
-    (e.g., using df.apply).
-    It encapsulates the logic for a single stream entry.
-
-    Args:
-        reason_end: The reason the track ended (e.g., "trackdone", "fwdbtn").
-                    Can be NaN if missing.
-        fraction_played: The proportion of the track that was played
-            (0.0 to 1.0). Can be NaN if missing.
-
-    Returns:
-        A float representing the score:
-        - `SCORE_POSITIVE` (1.0) if the reason is in `POSITIVE_END_REASONS`.
-        - `SCORE_NEGATIVE_HIGH_FRACTION_PLAYED` (-0.5) if in
-            `NEGATIVE_END_REASONS` (excluding "backbtn") and
-            `fraction_played` is above
-          `HIGH_FRACTION_PLAYED_THRESHOLD`.
-        - `SCORE_NEGATIVE` (-1.0) if in `NEGATIVE_END_REASONS` (or "backbtn").
-        - `SCORE_NEUTRAL` (0.0) for any other reason or if inputs are
-            invalid/missing.
-    """
-    # Handle missing/invalid inputs first
-    if not isinstance(reason_end, str):
-        # A non-string reason_end (e.g., NaN) implies an unknown or
-        # neutral outcome.
-        return SCORE_NEUTRAL
-
-    # Ensure fraction_played is a valid number, default to 0 for invalid/NaN
-    if not isinstance(fraction_played, (float, np.number)) or np.isnan(
-        fraction_played
-    ):
-        fraction_played = 0.0
-
-    reason_end_lower = (
-        reason_end.lower()
-    )  # Normalize to lowercase for robust comparison
-
-    if reason_end_lower in POSITIVE_END_REASONS:
-        return SCORE_POSITIVE
-    if reason_end_lower in NEGATIVE_END_REASONS:
-        if reason_end_lower != "backbtn":
-            # If the user has almost finished the song, lower penalty
-            if fraction_played > HIGH_FRACTION_PLAYED_THRESHOLD:
-                # TODO: Possibly refine this so non constant
-                return SCORE_NEGATIVE_HIGH_FRACTION_PLAYED
-        return SCORE_NEGATIVE
-    # Default for unknown reasons or neutral ones like 'revbtn'
-    # You could extend POSITIVE_END_REASONS, NEGATIVE_END_REASONS,
-    # NEUTRAL_END_REASONS to ensure all known reasons are explicitly
-    # categorized.
-    return SCORE_NEUTRAL
+WEIGHT_FRACTION_PLAYED: float = 1.0
+WEIGHT_REASON_START: float = 1.0
+WEIGHT_REASON_END: float = 1.0
+WEIGHT_SKIPPED: float = 1.0
+WEIGHT_SAVED: float = 1.0
 
 
-def _calculate_start_reason_score_single(
-    reason_start: Union[str, float],  # float to account for np.nan
-) -> float:
-    """
-    Calculates a score based on the reason a track started.
+def calculate_enjoyment_scores(streaming_df: pd.DataFrame) -> pd.DataFrame:
+    """Calculates and appends enjoyment scores to a streaming history
+    DataFrame.
 
-    This is a helper function designed for row-wise application
-    (e.g., using df.apply).
-    It encapsulates the logic for a single stream entry.
+    This function enriches the DataFrame with several new columns:
+    - `start_score`: A score based on how a track started.
+    - `end_score`: A score based on how a track ended.
+    - `enjoyment_score`: A final, weighted score for each listening stream,
+      representing an estimated level of user enjoyment for that specific
+      listen.
+
+    The calculations are performed using efficient, vectorized operations.
 
     Args:
-        reason_end: The reason the track ended (e.g., "clickrow").
-                    Can be NaN if missing.
+        streaming_df (pd.DataFrame): The processed streaming history DataFrame.
+            It must contain the columns: 'reason_start', 'reason_end',
+            'fraction_played', 'skipped', and 'is_saved'.
 
     Returns:
-        A float representing the score:
-        - `SCORE_VERY_POSITIVE` if the reason is user restarting the song.
-        - `SCORE_POSITIVE` if any other positive reason
-        - `SCORE_NEUTRAL` (0.0) for any other reason or if inputs are
-            invalid/missing.
+        pd.DataFrame: The input DataFrame with the new score columns appended.
+    """
+    logger.info("Calculating enjoyment scores for streaming data...")
+    df = streaming_df.copy()
+
+    # --- Step 1: Calculate Start Score (Vectorized) ---
+    start_conditions = [
+        df["reason_start"] == TRACK_RESTART_REASON,
+        df["reason_start"].isin(POSITIVE_START_REASONS),
+    ]
+    start_choices = [SCORE_VERY_POSITIVE, SCORE_POSITIVE]
+    df["start_score"] = np.select(
+        start_conditions, start_choices, default=SCORE_NEUTRAL
+    )
+    logger.debug("Calculated 'start_score' column.")
+
+    # --- Step 2: Calculate End Score (Vectorized) ---
+    end_conditions = [
+        # Positive case: track finished naturally.
+        df["reason_end"].isin(POSITIVE_END_REASONS),
+        # Negative case 1: Skipped, but after listening to most of it.
+        (
+            df["reason_end"].isin(NEGATIVE_END_REASONS)
+            & (df["reason_end"] != TRACK_RESTART_REASON)
+            & (df["fraction_played"] > HIGH_FRACTION_PLAYED_THRESHOLD)
+        ),
+        # Negative case 2: Any other skip.
+        df["reason_end"].isin(NEGATIVE_END_REASONS),
+    ]
+    end_choices = [
+        SCORE_POSITIVE,
+        SCORE_NEGATIVE_HIGH_FRACTION_PLAYED,
+        SCORE_NEGATIVE,
+    ]
+    # Note: The order of conditions matters. np.select uses the first True
+    # condition.
+    df["end_score"] = np.select(
+        end_conditions, end_choices, default=SCORE_NEUTRAL
+    )
+    logger.debug("Calculated 'end_score' column.")
+
+    # --- Step 3: Evaluate if the song has been saved by the user in any
+    # playlists to date:
+    df["is_saved"] = df.playlists.apply(lambda x: len(x) > 0)
+
+    # --- Step 4: Calculate Final Enjoyment Score (Vectorized) ---
+    # Ensure boolean columns are treated as 0s and 1s for the calculation.
+    # Note: 'skipped' is a penalty, so we multiply by -1.
+    df["enjoyment_score"] = (
+        (df["fraction_played"] * WEIGHT_FRACTION_PLAYED)
+        + (df["start_score"] * WEIGHT_REASON_START)
+        + (df["end_score"] * WEIGHT_REASON_END)
+        - (df["skipped"].astype(int) * WEIGHT_SKIPPED)
+        + (df["is_saved"].astype(int) * WEIGHT_SAVED)
+    )
+    logger.debug("Calculated final 'enjoyment_score' column.")
+
+    logger.info(
+        "Successfully calculated and appended enjoyment "
+        "scores to the DataFrame."
+    )
+    return df
+
+
+def normalise_scores(track_stream_scores: pd.Series) -> pd.Series:
+    """Normalise the scoring using clipping and min/max scaling to achieve a
+    more uniform distribution of scores between 0 and 1.
+
+    Args:
+        track_stream_scores:
+            Pandas Series covering the enjoyment scores across all streams
+
+    Returns:
+        Pandas Series of normalised scored
     """
 
-    if not isinstance(reason_start, str):
-        return SCORE_NEUTRAL
+    # Lower bound of the bottom 1%
+    lower_bound = track_stream_scores.quantile(0.01)
+    # Upper Bound of the top 99%
+    upper_bound = track_stream_scores.quantile(0.99)
 
-    if reason_start in POSITIVE_START_REASONS:
-        if reason_start == "backbtn":
-            # User is restarting a song, very positive indicator
-            return SCORE_VERY_POSITIVE
-        return SCORE_POSITIVE
-    # Default to negative for all other reasons or if reason is null
-    return SCORE_NEUTRAL
+    # Clip the series
+    clipped_scores = track_stream_scores.clip(
+        upper=upper_bound, lower=lower_bound
+    )
+
+    # Define out scaler
+    scaler = MinMaxScaler(feature_range=(0, 1))
+    # Return the scaled series
+    return scaler.fit_transform(clipped_scores.values.reshape(-1, 1))
