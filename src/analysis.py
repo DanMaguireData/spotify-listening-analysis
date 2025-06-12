@@ -221,3 +221,92 @@ def normalise_scores(track_stream_scores: pd.Series) -> pd.Series:
     scaler = MinMaxScaler(feature_range=(0, 1))
     # Return the scaled series
     return scaler.fit_transform(clipped_scores.values.reshape(-1, 1))
+
+
+def summarize_track_enjoyment(
+    scored_df: pd.DataFrame, k: int = 5
+) -> pd.DataFrame:
+    """Aggregates stream-level data to the track level and calculates an
+    adjusted score.
+
+    This function groups the detailed streaming data by track,
+    calculating summary statistics like total play count and average
+    enjoyment. It then computes a Bayesian-adjusted mean enjoyment score,
+    which moderates the scores of tracks with very few plays, pulling
+    them closer to the global average. This provides
+    a more stable and reliable ranking of top tracks.
+
+    Args:
+        scored_df (pd.DataFrame): The enriched DataFrame from
+            `enrich_with_analytical_metrics`, containing stream-level data and
+            normalized enjoyment scores.
+        k (int, optional): The Bayesian shrinkage parameter, representing the
+            "prior strength" or the number of "ghost plays" at the global
+            average score. Higher values cause scores of low-play-count tracks
+            to be pulled more strongly toward the global mean. Defaults to 5.
+
+    Returns:
+        pd.DataFrame:
+            A DataFrame aggregated by track, with columns for play count,
+            first/last listen times, and the Bayesian-adjusted mean
+            enjoyment score. Returns an empty DataFrame if the input
+            is empty.
+    """
+    if scored_df.empty:
+        logger.info(
+            "Input DataFrame is empty. Cannot summarize track enjoyment."
+        )
+        return pd.DataFrame()
+
+    required_cols = [
+        "track_name",
+        "album_artist",
+        "enjoyment_score_norm",
+        "streamed_at",
+    ]
+    if not all(col in scored_df.columns for col in required_cols):
+        logger.error(
+            "Input DataFrame is missing one or more "
+            "required columns for summarization."
+        )
+        return pd.DataFrame()
+
+    logger.info(
+        f"Aggregating track enjoyment data with Bayesian adjustment (k={k})..."
+    )
+
+    # Calculate the global mean score across all streams, used for
+    # the adjustment
+    global_mean_score = scored_df["enjoyment_score_norm"].mean()
+    logger.debug(
+        f"Global mean normalized enjoyment score: {global_mean_score:.4f}"
+    )
+
+    # Group by track and perform initial aggregations
+    grouped_df = (
+        scored_df.groupby(["track_name", "album_artist"])
+        .agg(
+            mean_enjoyment_score=("enjoyment_score_norm", "mean"),
+            play_count=("streamed_at", "count"),
+            first_listen=("streamed_at", "min"),
+            last_listen=("streamed_at", "max"),
+        )
+        .reset_index()
+    )
+
+    # Calculate the Bayesian-adjusted mean
+    # The formula is:
+    # ((mean_score * play_count) + (k * global_mean)) / ( play_count + k )
+    numerator = (
+        grouped_df["mean_enjoyment_score"] * grouped_df["play_count"]
+    ) + (k * global_mean_score)
+    denominator = grouped_df["play_count"] + k
+
+    grouped_df["adjusted_enjoyment_score"] = numerator / denominator
+
+    logger.info(
+        f"Successfully aggregated {len(scored_df)} streams into "
+        f"{len(grouped_df)} unique tracks."
+    )
+
+    return grouped_df

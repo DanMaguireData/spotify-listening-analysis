@@ -14,9 +14,11 @@ import sys
 
 from dotenv import load_dotenv
 
-from src.analysis import calculate_enjoyment_scores, normalise_scores
+from src.analysis import (calculate_enjoyment_scores, normalise_scores,
+                          summarize_track_enjoyment)
 from src.data_processor import clean_and_prepare_streaming_data
 from src.file_io import list_streaming_files, load_files_into_dataframe
+from src.reporting import AnalysisReporter
 from src.spotify_api_client import SpotipyClient
 from src.spotify_api_data_processor import SpotifyApiDataProcessor
 from src.spotify_api_pipeline import get_unified_spotify_track_data
@@ -90,6 +92,12 @@ def main() -> None:
     )
     logger.info("Scored song enjoyment levels")
     full_track_df.to_csv("data/merged.csv")
+
+    # --- Step 8: Get Track Level Enjoyment ---
+    scored_track_df = summarize_track_enjoyment(scored_df=full_track_df)
+    reporter = AnalysisReporter(scored_track_df)
+    reporter.print_overall_top_10()
+    reporter.print_top_10_by_year()
 
 
 if __name__ == "__main__":
