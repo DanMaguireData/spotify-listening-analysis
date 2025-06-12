@@ -2,7 +2,6 @@
 
 import logging
 
-import numpy as np
 import pandas as pd
 from dotenv import load_dotenv
 
@@ -23,15 +22,6 @@ def main():
     """Entry point to script."""
     df = pd.read_csv("data/merged.csv")
 
-    df["fraction_played"] = df.ms_played / df.track_duration_ms
-
-    df.loc[
-        df["ms_played"].apply(lambda x: x == 0 or pd.isnull(x)),
-        "fraction_played",
-    ] = np.nan
-
-    # TODO: How to handle if track played in excess of 100% of the runtime?
-    # TODO: How to handle if track has no duration?
     track = df.loc[21]
     print(track)
     df = calculate_enjoyment_scores(df)

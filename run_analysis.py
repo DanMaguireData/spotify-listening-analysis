@@ -14,6 +14,7 @@ import sys
 
 from dotenv import load_dotenv
 
+from src.analysis import calculate_enjoyment_scores, normalise_scores
 from src.data_processor import clean_and_prepare_streaming_data
 from src.file_io import list_streaming_files, load_files_into_dataframe
 from src.spotify_api_client import SpotipyClient
@@ -36,7 +37,7 @@ def main() -> None:
     """Runs analysis."""
     logger.info("Starting Spotify data analysis script.")
 
-    # Step 1: Check files exist
+    # --- Step 1: Check files exist ---
     logger.info("Scanning for streaming data...")
     streaming_files = list_streaming_files()
 
@@ -48,17 +49,18 @@ def main() -> None:
 
     logger.info(f"Found the following files: {streaming_files}")
 
-    # Step 2: Load files into a DataFrame
+    # --- Step 2: Load files into a DataFrame ---
     raw_df = load_files_into_dataframe(streaming_files)
 
-    # Step 3: Process the DataFrame into more useable format
+    # --- Step 3: Process the DataFrame into more useable format ---
     processed_df = clean_and_prepare_streaming_data(raw_df=raw_df)
 
-    # Step 4: Setup Spotify Client + Data Processor
+    # --- Step 4: Setup Spotify Client + Data Processor ---
     spotify_client = SpotipyClient()
     spotify_api_processor = SpotifyApiDataProcessor()
 
-    # Step 5: Fetch, process, and unify all track metadata from
+    # --- Step 5: Fetch, process, and unify
+    # all track metadata from ---
     # the Spotify API
     unified_api_df = get_unified_spotify_track_data(
         client=spotify_client,
@@ -73,14 +75,21 @@ def main() -> None:
         f"Gathered information on {len(unified_api_df)} songs from API"
     )
 
-    # Step 6: Combine data sources
+    # --- Step 6: Combine data sources ---
     full_track_df = processed_df.merge(
         unified_api_df.drop(columns=["track_name", "album_name"]),
         how="left",
         on="track_id",
     )
+    logger.info("Merged API data with streaming data")
+
+    # --- Step 7: Run scoring ---
+    full_track_df = calculate_enjoyment_scores(full_track_df)
+    full_track_df["enjoyment_score_norm"] = normalise_scores(
+        full_track_df["enjoyment_score"]
+    )
+    logger.info("Scored song enjoyment levels")
     full_track_df.to_csv("data/merged.csv")
-    logger.info("Merged API data with streming data")
 
 
 if __name__ == "__main__":

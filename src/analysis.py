@@ -58,7 +58,17 @@ def calculate_enjoyment_scores(streaming_df: pd.DataFrame) -> pd.DataFrame:
     logger.info("Calculating enjoyment scores for streaming data...")
     df = streaming_df.copy()
 
-    # --- Step 1: Calculate Start Score (Vectorized) ---
+    # --- Step 1: Evaluate the fraction of the full song being listened to ---
+    df["fraction_played"] = df.ms_played / df.track_duration_ms
+
+    df.loc[
+        df["ms_played"].apply(lambda x: x == 0 or pd.isnull(x)),
+        "fraction_played",
+    ] = np.nan
+    # TODO: How to handle if track played in excess of 100% of the runtime?
+    # TODO: How to handle if track has no duration?
+
+    # --- Step 2: Calculate Start Score ---
     start_conditions = [
         df["reason_start"] == TRACK_RESTART_REASON,
         df["reason_start"].isin(POSITIVE_START_REASONS),
@@ -69,7 +79,7 @@ def calculate_enjoyment_scores(streaming_df: pd.DataFrame) -> pd.DataFrame:
     )
     logger.debug("Calculated 'start_score' column.")
 
-    # --- Step 2: Calculate End Score (Vectorized) ---
+    # --- Step 3: Calculate End Score ---
     end_conditions = [
         # Positive case: track finished naturally.
         df["reason_end"].isin(POSITIVE_END_REASONS),
@@ -94,11 +104,11 @@ def calculate_enjoyment_scores(streaming_df: pd.DataFrame) -> pd.DataFrame:
     )
     logger.debug("Calculated 'end_score' column.")
 
-    # --- Step 3: Evaluate if the song has been saved by the user in any
+    # --- Step 4: Evaluate if the song has been saved by the user in any
     # playlists to date:
     df["is_saved"] = df.playlists.apply(lambda x: len(x) > 0)
 
-    # --- Step 4: Calculate Final Enjoyment Score (Vectorized) ---
+    # --- Step 5: Calculate Final Enjoyment Score (Vectorized) ---
     # Ensure boolean columns are treated as 0s and 1s for the calculation.
     # Note: 'skipped' is a penalty, so we multiply by -1.
     df["enjoyment_score"] = (
