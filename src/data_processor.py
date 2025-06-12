@@ -268,4 +268,6 @@ def clean_and_prepare_streaming_data(raw_df: pd.DataFrame) -> pd.DataFrame:
         "Data cleaning and preparation complete. Final records: %d.",
         len(processed_df),
     )
+
+    processed_df.streamed_at = pd.to_datetime(processed_df.streamed_at)
     return processed_df

@@ -4,6 +4,7 @@
 """
 
 import logging
+import math
 from typing import Set
 
 import numpy as np
@@ -32,6 +33,67 @@ WEIGHT_REASON_START: float = 1.0
 WEIGHT_REASON_END: float = 1.0
 WEIGHT_SKIPPED: float = 1.0
 WEIGHT_SAVED: float = 1.0
+
+
+def explode_long_streams(df: pd.DataFrame) -> pd.DataFrame:
+    """Expands streaming entries that represent multiple consecutive listens.
+
+    Any stream where 'fraction_played' > 1.0 is "exploded" into multiple
+    rows: one row for each full listen (fraction_played = 1.0) and a final
+    row for the remaining partial listen. Timestamps and reasons are adjusted
+    accordingly.
+
+    Args:
+        df (pd.DataFrame):
+            A DataFrame of processed streams, containing at least
+            'fraction_played', 'ms_played', 'track_duration_ms', 'streamed_at',
+            'reason_start', and 'reason_end'.
+
+    Returns:
+        pd.DataFrame: A DataFrame where long streams have been expanded into
+                      individual listen events, ready for enjoyment scoring.
+    """
+
+    single_listens = df[df.fraction_played <= 1].copy()
+    multi_listens = df[df.fraction_played > 1].copy()
+
+    # For each row we want to take the veiling of the current fraction
+    # to get the total number of listens
+    multi_listens["stream_count"] = multi_listens.fraction_played.apply(
+        math.ceil
+    )
+    # Duplicate
+    new_rows = []
+    for _, row in multi_listens.iterrows():
+        for stream in range(row.stream_count):
+            new_row = row.copy()
+            # If the last stream
+            if stream == row.stream_count - 1:
+                # Played for remainder
+                new_row["fraction_played"] = row.fraction_played % 1
+                new_row["ms_played"] = new_row["track_duration_ms"] * (
+                    row.fraction_played % 1
+                )
+                new_row["reason_start"] = "trackdone"
+            else:
+                new_row["fraction_played"] = 1.0
+                new_row["ms_played"] = new_row["track_duration_ms"]
+                # Change start resaon if not first stream
+                if stream > 0:
+                    new_row["reason_start"] = "trackdone"
+                new_row["reason_end"] = "trackdone"
+            # Start time is now based on what listen we are in the sequence
+            new_row["streamed_at"] = new_row["streamed_at"] + pd.Timedelta(
+                milliseconds=stream * new_row["track_duration_ms"]
+            )
+            new_rows.append(new_row)
+
+    # Sense Check
+    assert len(new_rows) == multi_listens["stream_count"].sum()
+
+    return pd.concat(
+        [single_listens, pd.DataFrame(new_rows)[single_listens.columns]]
+    )
 
 
 def calculate_enjoyment_scores(streaming_df: pd.DataFrame) -> pd.DataFrame:
@@ -64,9 +126,15 @@ def calculate_enjoyment_scores(streaming_df: pd.DataFrame) -> pd.DataFrame:
     df.loc[
         df["ms_played"].apply(lambda x: x == 0 or pd.isnull(x)),
         "fraction_played",
-    ] = np.nan
-    # TODO: How to handle if track played in excess of 100% of the runtime?
-    # TODO: How to handle if track has no duration?
+    ] = 0
+    # 1. Replace infinite values (from division by zero) with NaN.
+    df["fraction_played"] = df["fraction_played"].replace(
+        [np.inf, -np.inf], np.nan
+    )
+
+    # 2. Deal with streams that exceed the duration of a song i.e.
+    # Single rows with multiple streams
+    df = explode_long_streams(df)
 
     # --- Step 2: Calculate Start Score ---
     start_conditions = [
