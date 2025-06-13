@@ -22,6 +22,7 @@ from src.reporting import AnalysisReporter
 from src.spotify_api_client import SpotipyClient
 from src.spotify_api_data_processor import SpotifyApiDataProcessor
 from src.spotify_api_pipeline import get_unified_spotify_track_data
+from src.visualisations import plot_top_tracks_infographic
 
 # Setup Logger
 logging.basicConfig(
@@ -95,9 +96,13 @@ def main() -> None:
 
     # --- Step 8: Get Track Level Enjoyment ---
     scored_track_df = summarize_track_enjoyment(scored_df=full_track_df)
+    scored_track_df.to_csv("data/scored_tracks.csv")
     reporter = AnalysisReporter(scored_track_df)
     reporter.print_overall_top_10()
     reporter.print_top_10_by_year()
+
+    # --- Step 9: Generate Visualisations ---
+    plot_top_tracks_infographic(scored_track_df)
 
 
 if __name__ == "__main__":

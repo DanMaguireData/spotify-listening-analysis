@@ -8,4 +8,4 @@ ignore = .git, __pycache__, .venv
 disable = logging-fstring-interpolation, broad-exception-caught
 
 [BASIC]
-good-names = e,df,k
+good-names = e,df,k,ax,i

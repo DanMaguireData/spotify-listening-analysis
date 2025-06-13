@@ -290,6 +290,7 @@ def summarize_track_enjoyment(
             play_count=("streamed_at", "count"),
             first_listen=("streamed_at", "min"),
             last_listen=("streamed_at", "max"),
+            album_artwork_url=("album_artwork_url", "first"),
         )
         .reset_index()
     )

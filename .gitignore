@@ -193,10 +193,12 @@ cython_debug/
 .cursorignore
 .cursorindexingignore
 
-# Ignore the data directory and its contents
+# Ignore the data and reports directories and their contents
 data/*
+reports/*
 # But don't ignore the .gitkeep file, so the directory structure is preserved
 !data/.gitkeep
+!reports/.gitkeep
 
 # Environment variables
 .env
