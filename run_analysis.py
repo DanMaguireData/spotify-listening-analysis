@@ -99,6 +99,7 @@ def main() -> None:
     scored_track_df.to_csv("data/scored_tracks.csv")
     reporter = AnalysisReporter(scored_track_df)
     reporter.print_overall_top_10()
+    reporter.print_overall_bottom_10()
     reporter.print_top_10_by_year()
 
     # --- Step 9: Generate Visualisations ---
